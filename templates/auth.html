@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Авторизація | Clothify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav><a href="/">← На головну</a></nav>
+
+    <div class="auth-wrapper">
+        <div class="auth-card">
+            <div class="tabs">
+                <button id="t-login" class="tab active" onclick="setTab('login')">Вхід</button>
+                <button id="t-reg" class="tab" onclick="setTab('reg')">Реєстрація</button>
+            </div>
+
+            <h2 id="title">З поверненням!</h2>
+
+            <div id="name-group" class="input-group" style="display: none;">
+                <label>Ваше ім'я</label>
+                <input type="text" id="name" placeholder="Введіть своє ім'я">
+            </div>
+
+            <div class="input-group">
+                <label>Логін</label>
+                <input type="text" id="u" placeholder="Введіть логін">
+            </div>
+
+            <div class="input-group">
+                <label>Пароль</label>
+                <input type="password" id="p" placeholder="••••••••">
+            </div>
+
+            <button class="btn btn-primary" onclick="handle()">Продовжити</button>
+        </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>CLOTHIFY</h3>
+                <p>Командний проєкт з розробки магазину.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Навігація</h4>
+                <a href="/">Головна</a><br>
+                <a href="/auth">Авторизація</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2026 Clothify Store. Всі права захищені.
+        </div>
+    </footer>
+
+    <script>
+        let mode = 'login';
+
+        function setTab(m) {
+            mode = m;
+            document.getElementById('title').innerText = m === 'login' ? 'З поверненням!' : 'Створити аккаунт';
+            document.getElementById('t-login').classList.toggle('active', m === 'login');
+            document.getElementById('t-reg').classList.toggle('active', m === 'reg');
+
+            // Показуємо або ховаємо поле імені
+            document.getElementById('name-group').style.display = m === 'reg' ? 'block' : 'none';
+        }
+
+        async function handle() {
+            const username = document.getElementById('u').value;
+            const password = document.getElementById('p').value;
+            const name = document.getElementById('name').value;
+
+            const path = mode === 'login' ? '/api/login' : '/api/register';
+            const payload = { username, password };
+            if (mode === 'reg') payload.name = name;
+
+            const res = await fetch(path, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                if (mode === 'login') {
+                    localStorage.setItem('user', data.username);
+                    localStorage.setItem('avatar', data.avatar);
+                    window.location.href = '/profile';
+                } else {
+                    alert("Аккаунт створено! Тепер увійдіть.");
+                    setTab('login');
+                }
+            } else {
+                alert(data.message || "Помилка");
+            }
+        }
+    </script>
+
+</body>
+</html>
+

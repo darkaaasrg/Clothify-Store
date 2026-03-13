@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Clothify | Modern Store</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav>
+        <div class="logo" onclick="location.href='/'">CLOTHIFY</div>
+        <div>
+            <a href="/">Каталог</a>
+            <a href="/auth" id="auth-btn">Увійти</a>
+            <a href="/profile" id="profile-btn" style="display:none">Кабінет</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Пошук одягу..." onkeyup="filterItems()">
+            <select id="category-filter" onchange="filterItems()">
+                <option value="all">Всі категорії</option>
+                <option value="Верх">Верх</option>
+                <option value="Низ">Низ</option>
+            </select>
+        </div>
+
+        <header style="text-align: center; margin: 40px 0;">
+            <h1 style="font-size: 2.5rem;">Каталог одягу</h1>
+            <p style="color: #64748b;">Оберіть свій стиль серед найкращих пропозицій</p>
+        </header>
+
+        <div id="catalog" class="grid">
+            </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>CLOTHIFY</h3>
+                <p>Командний проєкт з розробки магазину.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Навігація</h4>
+                <a href="/">Головна</a><br>
+                <a href="/auth">Авторизація</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2026 Clothify Store. Всі права захищені.
+        </div>
+    </footer>
+
+    <script>
+        const user = localStorage.getItem('user');
+        let allItems = []; // Масив для зберігання всіх товарів з сервера
+
+        if(user) {
+            document.getElementById('auth-btn').style.display = 'none';
+            document.getElementById('profile-btn').style.display = 'inline';
+        }
+
+        // 1. Завантаження товарів
+        async function loadItems() {
+            try {
+                const res = await fetch('/api/items');
+                allItems = await res.json();
+                renderItems(allItems); // Спочатку малюємо всі товари
+            } catch (e) {
+                console.error("Помилка завантаження:", e);
+            }
+        }
+
+        // 2. Функція відображення карток
+        function renderItems(items) {
+            const div = document.getElementById('catalog');
+            div.innerHTML = '';
+
+            if (items.length === 0) {
+                div.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #94a3b8;">Нічого не знайдено</p>';
+                return;
+            }
+
+            items.forEach(i => {
+                div.innerHTML += `
+                    <div class="card">
+                        <div class="product-image-container" onclick="location.href='/product/${i.id}'" style="cursor:pointer">
+                            <img src="${i.img}" class="product-img">
+                        </div>
+                        <h3>${i.name}</h3>
+                        <p class="price">${i.price} ₴</p>
+                        <button class="btn btn-primary" onclick="addToCart(${i.id})">У кошик</button>
+                    </div>`;
+            });
+        }
+
+        // 3. Логіка фільтрації
+        function filterItems() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const category = document.getElementById('category-filter').value;
+
+            const filtered = allItems.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(query);
+                // Перевіряємо за полем 'cat', яке приходить з твого API
+                const matchesCategory = category === 'all' || item.cat === category;
+                return matchesSearch && matchesCategory;
+            });
+
+            renderItems(filtered);
+        }
+
+        async function addToCart(id) {
+            if(!user) return location.href = '/auth';
+            const res = await fetch('/api/add_to_cart', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: user, item_id: id})
+            });
+            if(res.ok) alert("Додано!");
+        }
+
+        loadItems();
+    </script>
+</body>
+</html>

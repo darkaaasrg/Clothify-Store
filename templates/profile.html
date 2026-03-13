@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Мій Профіль | Clothify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Стиль для значка кількості */
+        .qty-badge {
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        /* Контейнер для швидких сповіщень замість alert() */
+        #toast-container {
+            position: fixed; top: 20px; right: 20px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            background: #4caf50; color: white; padding: 12px 20px;
+            border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-weight: 500; transition: 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo" onclick="location.href='/'">CLOTHIFY</div>
+        <div>
+            <a href="/">Каталог</a>
+            <button class="btn btn-secondary" onclick="logout()" style="width:auto; margin:0">Вийти</button>
+        </div>
+    </nav>
+
+    <div id="toast-container"></div>
+
+    <div class="container grid-profile">
+        <div class="card">
+            <div class="avatar-container">
+                <img id="avatar" src="" class="avatar" alt="Аватар" onerror="this.src='/static/uploads/default_avatar.png'">
+            </div>
+            <input type="file" id="file-input" hidden onchange="uploadAvatar()">
+            <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">Змінити фото</button>
+
+            <div class="input-group" style="margin-top: 25px;">
+                <label>Ваше ім'я</label>
+                <input type="text" id="name-input" placeholder="Як вас звати?">
+            </div>
+            <button class="btn btn-primary" onclick="saveName()">Зберегти ім'я</button>
+
+            <p style="margin-top: 20px; color: var(--text-muted); font-size: 0.9rem;">
+                Логін: <b id="username-display"></b>
+            </p>
+        </div>
+
+        <div class="card">
+            <h3 style="text-align: left; margin-bottom: 20px;">Ваш кошик</h3>
+            <div id="cart-list" class="cart-list"></div>
+            <div class="total-section">
+                Разом: <span id="total-price">0</span> ₴
+            </div>
+        </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>CLOTHIFY</h3>
+                <p>Командний проєкт з розробки магазину.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Навігація</h4>
+                <a href="/">Головна</a><br>
+                <a href="/auth">Авторизація</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2026 Clothify Store. Всі права захищені.
+        </div>
+    </footer>
+
+    <script>
+        const currentUsername = localStorage.getItem('user');
+
+        // Функція для повідомлень без блокування екрану
+        function showMsg(text) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = text;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        async function init() {
+            if(!currentUsername) {
+                window.location.href = '/auth';
+                return;
+            }
+
+            try {
+                const profileRes = await fetch('/api/get_profile/' + currentUsername);
+                if (profileRes.status === 404) throw new Error("404");
+
+                const profileData = await profileRes.json();
+                document.getElementById('username-display').innerText = currentUsername;
+                document.getElementById('name-input').value = profileData.name || currentUsername;
+                document.getElementById('avatar').src = profileData.avatar ? '/static/uploads/' + profileData.avatar : '/static/uploads/default_avatar.png';
+            } catch (e) {
+                console.error("Помилка профілю:", e);
+            }
+
+            loadCart();
+        }
+
+        async function loadCart() {
+            const listDiv = document.getElementById('cart-list');
+            const totalSpan = document.getElementById('total-price');
+
+            try {
+                const res = await fetch('/api/get_cart/' + currentUsername);
+                const items = await res.json();
+
+                listDiv.innerHTML = '';
+                let total = 0;
+
+                if (items.length === 0) {
+                    listDiv.innerHTML = '<p style="color: #94a3b8;">Кошик порожній...</p>';
+                }
+
+                items.forEach(item => {
+                    total += item.price * item.qty;
+                    listDiv.innerHTML += `
+                        <div class="cart-item">
+                            <div class="cart-item-info">
+                                <h4>
+                                    ${item.name}
+                                    ${item.qty > 1 ? `<span class="qty-badge">x${item.qty}</span>` : ''}
+                                </h4>
+                                <p>${item.price * item.qty} ₴</p>
+                            </div>
+                            <button class="btn-delete" onclick="removeFromCart(${item.id})" style="background:#fee2e2; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; color:#ef4444;">Видалити</button>
+                        </div>
+                    `;
+                });
+                totalSpan.innerText = total;
+            } catch (e) { console.error("Помилка кошика:", e); }
+        }
+
+        async function removeFromCart(cartId) {
+            const res = await fetch(`/api/remove_from_cart/${cartId}`, { method: 'DELETE' });
+            if(res.ok) {
+                showMsg("Видалено з кошика");
+                loadCart();
+            }
+        }
+
+        async function saveName() {
+            const newName = document.getElementById('name-input').value;
+            const formData = new FormData();
+            formData.append('username', currentUsername);
+            formData.append('name', newName);
+
+            const res = await fetch('/api/update_profile', { method: 'POST', body: formData });
+            if(res.ok) showMsg("Ім'я успішно збережено!");
+        }
+
+        async function uploadAvatar() {
+            const fileInput = document.getElementById('file-input');
+            if(!fileInput.files[0]) return;
+
+            const fd = new FormData();
+            fd.append('avatar', fileInput.files[0]);
+            fd.append('username', currentUsername);
+
+            const res = await fetch('/api/update_profile', { method: 'POST', body: fd });
+            const data = await res.json();
+            if(res.ok) {
+                document.getElementById('avatar').src = '/static/uploads/' + data.avatar;
+                showMsg("Фото профілю оновлено!");
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+
+        init();
+    </script>
+</body>
+</html>

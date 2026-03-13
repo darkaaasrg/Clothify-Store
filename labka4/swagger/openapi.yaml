@@ -1,0 +1,159 @@
+openapi: 3.0.0
+info:
+  title: Clothify Store Review API
+  description: API для керування відгуками про товари в магазині одягу Clothify.
+  version: 1.0.0
+
+servers:
+  - url: http://127.0.0.1:5000
+    description: Локальний сервер розробки
+
+paths:
+  /api/add_review:
+    post:
+      summary: Створення нового відгуку (Create)
+      tags:
+        - Reviews
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateDTO'
+      responses:
+        '201':
+          description: Відгук успішно створено
+        '400':
+          description: Невалідні дані
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/product/{item_id}:
+    get:
+      summary: Отримання списку відгуків для товару (Read)
+      tags:
+        - Reviews
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список відгуків
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewDTO'
+        '404':
+          description: Товар не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/edit_review/{review_id}:
+    put:
+      summary: Оновлення тексту відгуку (Update)
+      tags:
+        - Reviews
+      parameters:
+        - name: review_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewUpdateDTO'
+      responses:
+        '200':
+          description: Відгук оновлено
+        '400':
+          description: Помилка валідації
+        '404':
+          description: Відгук не знайдено
+        '403':
+          description: Доступ заборонено (не власник)
+
+  /api/delete_review/{review_id}:
+    delete:
+      summary: Видалення відгуку (Delete)
+      tags:
+        - Reviews
+      parameters:
+        - name: review_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+      responses:
+        '204':
+          description: Відгук видалено
+        '404':
+          description: Відгук не знайдено
+
+components:
+  schemas:
+    ReviewDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          type: string
+        user_login:
+          type: string
+        text:
+          type: string
+        avatar:
+          type: string
+
+    ReviewCreateDTO:
+      type: object
+      required:
+        - item_id
+        - username
+        - text
+      properties:
+        item_id:
+          type: integer
+        username:
+          type: string
+        text:
+          type: string
+
+    ReviewUpdateDTO:
+      type: object
+      required:
+        - username
+        - text
+      properties:
+        username:
+          type: string
+        text:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string

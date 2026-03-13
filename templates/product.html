@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Деталі товару | Clothify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container { max-width: 1100px; margin: 50px auto; padding: 20px; }
+        .grid-profile { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .card { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; }
+
+        /* Банер Degraded Mode */
+        #degraded-banner {
+            display: none; background: #ef4444; color: white; padding: 15px;
+            text-align: center; border-radius: 12px; font-weight: bold; margin-bottom: 20px;
+        }
+
+        /* Стильні сповіщення замість alert() */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #4caf50; color: white; padding: 12px 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-weight: 500; animation: slideIn 0.3s ease-out; }
+        .toast.error { background: #ef4444; }
+        .toast.warning { background: #f59e0b; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Стан заблокованої кнопки */
+        .btn-disabled {
+            background-color: #94a3b8 !important;
+            cursor: not-allowed !important;
+            opacity: 0.7;
+        }
+
+        /* Відгуки та футер */
+        .reviews-section { max-width: 1100px; margin: 40px auto; padding: 20px; }
+        .review-card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .review-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+        .review-controls { display: flex; gap: 10px; margin-left: auto; }
+        .btn-action { background: none; border: none; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+        .input-field { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px; font-family: inherit; }
+    </style>
+</head>
+<body>
+    <nav><div class="logo" onclick="location.href='/'" style="cursor:pointer">CLOTHIFY</div><a href="/">← Назад до каталогу</a></nav>
+
+    <div id="toast-container"></div>
+
+    <div class="container">
+        <div id="degraded-banner">⚠️ Система перевантажена. Можливість додавання заблокована на 10 секунд.</div>
+
+        <div class="grid-profile">
+            <div class="card"><img id="p-img" src="" style="width: 100%; border-radius: 20px;"></div>
+            <div class="card" style="text-align: left;">
+                <h1 id="p-name">Завантаження...</h1>
+                <p id="p-price" style="font-size: 2rem; color: #6366f1; font-weight: bold;"></p>
+                <hr><br>
+                <p><b>Тканина:</b> <span id="p-fabric"></span></p>
+                <p><b>Країна:</b> <span id="p-origin"></span></p>
+                <p><b>Опис:</b> <span id="p-desc"></span></p><br>
+                <button id="add-to-cart-btn" class="btn btn-primary" onclick="addToCart()">Додати в кошик</button>
+            </div>
+        </div>
+
+        <div class="reviews-section">
+            <h3>Відгуки покупців</h3>
+            <div id="reviews-list"></div>
+            <div id="review-form" style="display:none; margin-top: 30px;">
+                <h4>Залишити відгук</h4>
+                <textarea id="review-text" class="input-field" rows="3" placeholder="Ваш відгук..."></textarea>
+                <button class="btn btn-primary" onclick="submitReview()" style="width: auto;">Надіслати</button>
+            </div>
+            <div id="auth-hint" style="display:none; margin-top: 30px; padding: 15px; background: #f3f4f6; border-radius: 12px; text-align: center;">
+                <p style="margin:0; color:#4b5563;">
+                    Хочете додати відгук?
+                    <a href="/auth" style="color:#6366f1; font-weight:bold; text-decoration:none;">Увійдіть в акаунт</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-section"><h3>CLOTHIFY</h3><p>Командний проєкт магазину.</p></div>
+            <div class="footer-section"><h4>Навігація</h4><a href="/">Головна</a><br><a href="/auth">Авторизація</a></div>
+        </div>
+        <div class="footer-bottom">&copy; 2026 Clothify Store. Всі права захищені.</div>
+    </footer>
+
+    <script>
+    const productId = {{ id }};
+    const currentUsername = localStorage.getItem('user');
+    let consecutiveErrors = 0;
+    let isDegraded = false;
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerText = message;
+        container.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+
+    async function fetchWithResilience(url, opts = {}) {
+        const { retry = 3, idempotencyKey, ...init } = opts;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        try {
+            const res = await fetch(url, {
+                ...init,
+                signal: controller.signal,
+                headers: {
+                    ...init.headers,
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': idempotencyKey,
+                    'X-Request-Id': crypto.randomUUID()
+                }
+            });
+
+            if (res.status === 429) {
+                const retryAfter = parseInt(res.headers.get("Retry-After")) || 5;
+                showToast(`Зачекайте ${retryAfter}с (Retry-After)...`, 'warning');
+                await new Promise(r => setTimeout(r, retryAfter * 1000));
+                return fetchWithResilience(url, { ...opts, retry: retry - 1 });
+            }
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res;
+
+        } catch (e) {
+            if (retry > 0) {
+                const delay = Math.pow(2, (3 - retry)) * 500 + Math.random() * 200;
+                await new Promise(r => setTimeout(r, delay));
+                return fetchWithResilience(url, { ...opts, retry: retry - 1 });
+            }
+            throw e;
+        } finally { clearTimeout(timeoutId); }
+    }
+
+    async function addToCart() {
+        // Додано: перевірка на авторизацію перед додаванням
+        if (!currentUsername) {
+            showToast("Щоб додати товар у кошик, потрібно увійти в акаунт!", "warning");
+            setTimeout(() => { location.href = '/auth'; }, 2000);
+            return;
+        }
+
+        if (isDegraded) return;
+
+        const btn = document.getElementById('add-to-cart-btn');
+        const banner = document.getElementById('degraded-banner');
+        const idemKey = `cart-${currentUsername}-${productId}-${Math.floor(Date.now()/5000)}`;
+
+        try {
+            await fetchWithResilience('/api/add_to_cart', {
+                method: 'POST',
+                body: JSON.stringify({username: currentUsername, item_id: productId}),
+                idempotencyKey: idemKey
+            });
+
+            showToast("Товар додано в кошик!");
+            consecutiveErrors = 0;
+
+        } catch (e) {
+            consecutiveErrors++;
+            if (consecutiveErrors >= 3) {
+                isDegraded = true;
+                btn.disabled = true;
+                btn.classList.add('btn-disabled');
+                banner.style.display = 'block';
+
+                let timeLeft = 10;
+                const countdown = setInterval(() => {
+                    btn.innerText = `Зачекайте... (${timeLeft}с)`;
+                    banner.innerText = `Система перевантажена. Блокування: ${timeLeft} секунд.`;
+                    timeLeft--;
+
+                    if (timeLeft < 0) {
+                        clearInterval(countdown);
+                        isDegraded = false; btn.disabled = false; btn.classList.remove('btn-disabled');
+                        btn.innerText = "Додати в кошик"; banner.style.display = 'none'; consecutiveErrors = 0;
+                    }
+                }, 1000);
+            }
+        }
+    }
+
+    async function submitReview() {
+        const text = document.getElementById('review-text').value;
+        const res = await fetch('/api/add_review', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: currentUsername, item_id: productId, text: text})
+        });
+
+        if (res.ok) {
+            showToast("Надіслано!");
+            document.getElementById('review-text').value = '';
+            loadProduct();
+        } else {
+            const errorData = await res.json();
+            showToast((errorData.message || "Помилка"), "error");
+        }
+    }
+
+    async function deleteReview(id) {
+        const res = await fetch(`/api/delete_review/${id}?username=${currentUsername}`, { method: 'DELETE' });
+        if(res.ok) { showToast("Відгук видалено"); loadProduct(); }
+    }
+
+    function enableEdit(id) {
+        const p = document.getElementById(`review-text-${id}`);
+        const oldText = p.innerText;
+        p.innerHTML = `<textarea id="edit-input-${id}" class="input-field">${oldText}</textarea>
+                       <button class="btn btn-primary" style="padding:5px 10px; font-size:0.7rem;" onclick="saveEdit(${id})">Зберегти</button>
+                       <button class="btn btn-secondary" style="padding:5px 10px; font-size:0.7rem;" onclick="loadProduct()">Скасувати</button>`;
+    }
+
+    async function saveEdit(id) {
+        const newText = document.getElementById(`edit-input-${id}`).value;
+        const res = await fetch(`/api/edit_review/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: currentUsername, text: newText})
+        });
+
+        if (res.ok) {
+            showToast("Оновлено!");
+            loadProduct();
+        } else {
+            const errorData = await res.json();
+            showToast((errorData.message || "Помилка"), "error");
+        }
+    }
+
+    async function loadProduct() {
+        const res = await fetch(`/api/product/${productId}`);
+        const i = await res.json();
+        document.getElementById('p-img').src = i.img;
+        document.getElementById('p-name').innerText = i.name;
+        document.getElementById('p-price').innerText = i.price + ' ₴';
+        document.getElementById('p-fabric').innerText = i.fabric || '—';
+        document.getElementById('p-origin').innerText = i.origin || '—';
+        document.getElementById('p-desc').innerText = i.desc || '—';
+
+        const listDiv = document.getElementById('reviews-list');
+        listDiv.innerHTML = i.reviews.length ? '' : '<p>Відгуків немає.</p>';
+        i.reviews.forEach(r => {
+            const isMine = r.user_login === currentUsername;
+            listDiv.innerHTML += `
+                <div class="review-card" id="review-${r.id}">
+                    <img src="/static/uploads/${r.avatar}" class="review-avatar" onerror="this.src='/static/uploads/default_avatar.png'">
+                    <div style="flex-grow:1; text-align:left;">
+                        <b>${r.user}</b>
+                        <p id="review-text-${r.id}">${r.text}</p>
+                    </div>
+                    ${isMine ? `<div class="review-controls">
+                        <button class="btn-action" style="color:var(--primary)" onclick="enableEdit(${r.id})">Редагувати</button>
+                        <button class="btn-action" style="color:red" onclick="deleteReview(${r.id})">Видалити</button>
+                    </div>` : ''}
+                </div>`;
+        });
+
+        // Модифіковано: Перевірка авторизації для відгуків
+        if(currentUsername) {
+            document.getElementById('review-form').style.display = 'block';
+            document.getElementById('auth-hint').style.display = 'none';
+        } else {
+            document.getElementById('review-form').style.display = 'none';
+            document.getElementById('auth-hint').style.display = 'block';
+        }
+    }
+
+    loadProduct();
+    </script>
+</body>
+</html>
