@@ -1,0 +1,43 @@
+name: Clothify Store CI/CD
+
+# Запускати автоматично при пуші в гілку main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Копіюємо код із репозиторію на сервер GitHub
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Встановлюємо Python 3.13
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # 3. Встановлюємо Poetry
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # 4. Встановлюємо залежності проєкту
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      # 5. Перевіряємо, чи збирається наш Docker-образ
+      # Це гарантує, що твій Dockerfile робочий
+      - name: Build Docker Image
+        run: docker build -t clothify-store:latest .
+
+      # 6. (Опціонально) Запуск тестів
+      # Якщо у тебе вже є тести в папці tests, розкоментуй рядок нижче
+      - name: Run Pytest
+        run: poetry run pytest
