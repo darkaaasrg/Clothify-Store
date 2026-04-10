@@ -30,7 +30,9 @@ jobs:
 
       # 4. Встановлюємо залежності проєкту
       - name: Install dependencies
-        run: poetry install --no-root
+        run: |
+          poetry lock --no-update
+          poetry install --no-root
 
       # 5. Перевіряємо, чи збирається наш Docker-образ
       # Це гарантує, що твій Dockerfile робочий
@@ -40,4 +42,6 @@ jobs:
       # 6. (Опціонально) Запуск тестів
       # Якщо у тебе вже є тести в папці tests, розкоментуй рядок нижче
       - name: Run Pytest
-        run: poetry run pytest
+        run: |
+          pip install pytest pytest-flask  
+          poetry run pytest
