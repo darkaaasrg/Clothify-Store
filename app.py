@@ -8,7 +8,6 @@ from domain.models import db, User, Item, Cart, Review
 
 app = Flask(__name__)
 
-# --- 1. НАЛАШТУВАННЯ ---
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///shop.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
@@ -16,12 +15,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 db.init_app(app)
 
-# Сховища для Практики 5
 idem_store = {}
 rate_limit_data = {}
 
 
-# --- 2. MIDDLEWARE (X-Request-Id та Rate-Limit) ---
 @app.before_request
 def middleware():
     rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
@@ -54,8 +51,6 @@ def add_headers(response):
     response.headers["X-Request-Id"] = getattr(request, 'rid', str(uuid.uuid4()))
     return response
 
-
-# --- 3. БД ТА ТВОЇ ТОВАРИ (ВСІ 6 ТУТ!) ---
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
@@ -85,7 +80,6 @@ with app.app_context():
         db.session.commit()
 
 
-# --- 4. СТОРІНКИ ---
 @app.route('/')
 def index(): return render_template('index.html')
 
@@ -102,12 +96,9 @@ def profile_page(): return render_template('profile.html')
 def auth_page(): return render_template('auth.html')
 
 
-# --- 5. HEALTH CHECK ---
 @app.route('/api/health')
 def health(): return jsonify({"status": "ok"}), 200
 
-
-# --- 6. ТОВАРИ ---
 @app.route('/api/items')
 def get_items():
     query = Item.query
@@ -131,8 +122,6 @@ def get_product(item_id):
             for r in i.reviews]
     })
 
-
-# --- 7. КОШИК ТА ІДЕМПОТЕНТНІСТЬ ---
 @app.route('/api/add_to_cart', methods=['POST'])
 def add_to_cart():
     key = request.headers.get("Idempotency-Key")
@@ -155,7 +144,6 @@ def add_to_cart():
     return jsonify({**res_data, "requestId": request.rid}), 201
 
 
-# --- 8. ВІДГУКИ (З ВАЛІДАЦІЄЮ) ---
 @app.route('/api/add_review', methods=['POST'])
 def add_review():
     data = request.json
@@ -185,7 +173,6 @@ def edit_review(review_id):
     return jsonify({"message": "Updated"}), 200
 
 
-# --- 9. АВТОРИЗАЦІЯ ТА ПРОФІЛЬ ---
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
@@ -255,4 +242,4 @@ def delete_review(review_id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000)
